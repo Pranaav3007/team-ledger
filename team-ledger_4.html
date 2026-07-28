@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --ink:#1B2430;
@@ -341,7 +342,7 @@
         </table>
       </div>
       <p class="hint-row">Month columns are generated automatically from each member's From/To dates. Grey cells mean that member isn't on the project that month — both Revenue Hrs and Cost Hrs default to 160/month but are editable per month.</p>
-      <p class="hint-row" id="sync-hint">Share this conversation's link and anyone viewing it sees your edits update live, roughly every few seconds. (Live sync only works while viewing through Claude — a downloaded copy of this file stays local-only.)</p>
+      <p class="hint-row" id="sync-hint">Data is stored in Supabase and updates live for anyone with this page open — works from anywhere it's hosted, not just inside Claude. If the badge says "Local only", add your Supabase URL/key in the script (see comments near the top of the JS).</p>
     </section>
   </main>
 </div>
@@ -355,7 +356,6 @@
   var ledgerIndex = [];
   var localLedgerCache = {};
   var lastSyncedJSON = "";
-  var pollingStarted = false;
 
   var ROLES = [
     "Project Manager","Product Manager","Business Analyst","Solution Architect","Tech Lead",
@@ -412,10 +412,20 @@
     return { months:months, label:label };
   }
 
-  // ---------- Storage (multi-ledger, shared/live) ----------
-  var IDX_KEY = "ledger-index";
-  function dataKey(id){ return "ledger-data-" + id; }
-  var hasStorage = (typeof window.storage !== "undefined") && window.storage;
+  // ---------- Storage (Supabase-backed, multi-ledger, real-time) ----------
+  // 1) Create a Supabase project (free tier is fine): https://supabase.com
+  // 2) Run supabase-setup.sql (provided alongside this file) in the SQL Editor
+  // 3) Paste your Project URL and anon public key below (Project Settings → API)
+  var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co/rest/v1/";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kd3NmYXZ4Y3V2aGxxdnB4ZW5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMDUwNDMsImV4cCI6MjEwMDc4MTA0M30.A6rsjeso_STfQgw_e-ZYpX9NSLauI6JQuplcw_8BZrY";
+
+  var sb = null;
+  try {
+    if(SUPABASE_URL.indexOf("YOUR_SUPABASE_URL") === -1 && typeof supabase !== "undefined"){
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch(e){ sb = null; }
+  var hasStorage = !!sb;
 
   function setBadge(text, cls){
     var el = document.getElementById("sync-badge");
@@ -424,70 +434,97 @@
     el.className = "sync-badge" + (cls ? " "+cls : "");
   }
 
+  function rowToIndexEntry(row){
+    var d = row.data || {};
+    return { id: row.id, name: row.name, memberCount: (d.members||[]).length, updatedAt: new Date(row.updated_at).getTime() };
+  }
+
   function loadIndex(){
     if(!hasStorage) return Promise.resolve(ledgerIndex);
-    return window.storage.get(IDX_KEY, true).then(function(r){
-      if(r && r.value){ try{ ledgerIndex = JSON.parse(r.value) || []; }catch(e){} }
-      return ledgerIndex;
-    }).catch(function(){ return ledgerIndex; });
+    return sb.from("ledgers").select("id,name,data,updated_at").order("updated_at",{ascending:false})
+      .then(function(res){
+        if(res.error){ console.error(res.error); return ledgerIndex; }
+        ledgerIndex = (res.data || []).map(rowToIndexEntry);
+        return ledgerIndex;
+      }).catch(function(){ return ledgerIndex; });
   }
-  function saveIndex(){
-    if(!hasStorage) return Promise.resolve();
-    return window.storage.set(IDX_KEY, JSON.stringify(ledgerIndex), true).catch(function(){});
-  }
-  function upsertIndexEntry(){
+
+  function upsertIndexEntryLocal(){
     if(!state.ledgerId) return;
     var entry = ledgerIndex.filter(function(e){ return e.id === state.ledgerId; })[0];
     var payload = { id: state.ledgerId, name: state.ledgerName || "Untitled ledger", memberCount: state.members.length, updatedAt: Date.now() };
     if(entry){ entry.name = payload.name; entry.memberCount = payload.memberCount; entry.updatedAt = payload.updatedAt; }
     else { ledgerIndex.push(payload); }
-    saveIndex();
   }
+
   function cacheLedger(){
     if(!state.ledgerId) return;
     localLedgerCache[state.ledgerId] = { name: state.ledgerName, members: JSON.parse(JSON.stringify(state.members)), nextId: nextId };
   }
+
   function saveLedgerData(){
     if(!state.ledgerId) return;
     cacheLedger();
-    upsertIndexEntry();
+    upsertIndexEntryLocal();
     if(!hasStorage) return;
-    var payload = JSON.stringify({ name: state.ledgerName, members: state.members, nextId: nextId });
-    lastSyncedJSON = payload;
-    window.storage.set(dataKey(state.ledgerId), payload, true).then(function(res){
-      setBadge(res ? "Live · synced" : "Sync failed", res ? "live" : "off");
+    var dataObj = { name: state.ledgerName, members: state.members, nextId: nextId };
+    lastSyncedJSON = JSON.stringify(dataObj);
+    sb.from("ledgers").upsert({
+      id: state.ledgerId,
+      name: state.ledgerName || "Untitled ledger",
+      data: dataObj,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "id" }).then(function(res){
+      setBadge(res.error ? "Sync failed" : "Live · synced", res.error ? "off" : "live");
+      if(res.error) console.error(res.error);
     }).catch(function(){ setBadge("Sync failed", "off"); });
   }
 
-  function pollTick(){
-    if(!hasStorage) return;
+  function deleteLedgerRemote(id){
+    if(!hasStorage) return Promise.resolve();
+    return sb.from("ledgers").delete().eq("id", id).catch(function(){});
+  }
+
+  // Real-time: any browser tab with this page open (anywhere, not just Claude)
+  // gets pushed updates the moment a row changes.
+  function handleRealtimeChange(payload){
     var activeEl = document.querySelector(".screen.active");
     if(!activeEl) return;
     if(activeEl.id === "screen-list"){
       loadIndex().then(function(){ renderLedgerList(); });
-    } else if(activeEl.id === "screen-2" && state.ledgerId){
-      window.storage.get(dataKey(state.ledgerId), true).then(function(r){
-        if(r && r.value && r.value !== lastSyncedJSON){
-          var data = JSON.parse(r.value);
-          state.members = data.members || [];
-          nextId = Math.max(nextId, data.nextId || 1);
-          lastSyncedJSON = r.value;
-          localLedgerCache[state.ledgerId] = data;
-          renderTable();
-          setBadge("Live · synced", "live");
-        }
-      }).catch(function(){});
+      return;
+    }
+    if(activeEl.id === "screen-2" && state.ledgerId && payload.new && payload.new.id === state.ledgerId){
+      var d = payload.new.data || {};
+      var asStr = JSON.stringify(d);
+      if(asStr !== lastSyncedJSON){
+        state.members = d.members || [];
+        nextId = Math.max(nextId, d.nextId || 1);
+        state.ledgerName = d.name || state.ledgerName;
+        lastSyncedJSON = asStr;
+        localLedgerCache[state.ledgerId] = d;
+        document.getElementById("ledger-name-input").value = state.ledgerName;
+        renderTable();
+        setBadge("Live · synced", "live");
+      }
     }
   }
-  function startPolling(){
-    if(pollingStarted || !hasStorage) return;
-    pollingStarted = true;
-    setInterval(pollTick, 3000);
+
+  function startRealtime(){
+    if(!hasStorage) return;
+    sb.channel("ledgers-changes")
+      .on("postgres_changes", { event:"*", schema:"public", table:"ledgers" }, handleRealtimeChange)
+      .subscribe();
+    // light safety-net refresh in case a realtime event is ever missed
+    setInterval(function(){
+      var activeEl = document.querySelector(".screen.active");
+      if(activeEl && activeEl.id === "screen-list") loadIndex().then(renderLedgerList);
+    }, 15000);
   }
 
   function init(){
     if(!hasStorage){
-      setBadge("Local only", "off");
+      setBadge("Local only — add Supabase keys", "off");
       renderLedgerList();
       goTo("list");
       return;
@@ -497,7 +534,7 @@
       renderLedgerList();
       goTo("list");
       setBadge("Live · synced", "live");
-      startPolling();
+      startRealtime();
     });
   }
 
@@ -540,9 +577,8 @@
 
   function deleteLedger(id){
     ledgerIndex = ledgerIndex.filter(function(e){ return e.id !== id; });
-    saveIndex();
     delete localLedgerCache[id];
-    if(hasStorage){ window.storage.delete(dataKey(id), true).catch(function(){}); }
+    deleteLedgerRemote(id);
     renderLedgerList();
   }
 
@@ -559,14 +595,14 @@
     goTo("2");
     if(hasStorage){
       setBadge("Loading…", "off");
-      window.storage.get(dataKey(id), true).then(function(r){
+      sb.from("ledgers").select("name,data").eq("id", id).maybeSingle().then(function(res){
         if(state.ledgerId !== id) return;
-        if(r && r.value){
-          var data = JSON.parse(r.value);
+        if(res.data && res.data.data){
+          var data = res.data.data;
           state.members = data.members || [];
           nextId = Math.max(nextId, data.nextId || 1);
-          state.ledgerName = data.name || state.ledgerName;
-          lastSyncedJSON = r.value;
+          state.ledgerName = res.data.name || data.name || state.ledgerName;
+          lastSyncedJSON = JSON.stringify(data);
           localLedgerCache[id] = data;
           document.getElementById("ledger-name-input").value = state.ledgerName;
           renderTable();
