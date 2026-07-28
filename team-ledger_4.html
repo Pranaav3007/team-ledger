@@ -356,6 +356,8 @@
   var ledgerIndex = [];
   var localLedgerCache = {};
   var lastSyncedJSON = "";
+  var lastSavedUpdatedAt = null;
+  var saveDebounceTimer = null;
   var lastLoadError = null;
 
   var ROLES = [
@@ -417,9 +419,8 @@
   // 1) Create a Supabase project (free tier is fine): https://supabase.com
   // 2) Run supabase-setup.sql (provided alongside this file) in the SQL Editor
   // 3) Paste your Project URL and anon public key below (Project Settings → API)
- var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
+var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kd3NmYXZ4Y3V2aGxxdnB4ZW5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMDUwNDMsImV4cCI6MjEwMDc4MTA0M30.A6rsjeso_STfQgw_e-ZYpX9NSLauI6JQuplcw_8BZrY";
-
   var sb = null;
   try {
     if(SUPABASE_URL.indexOf("YOUR_SUPABASE_URL") === -1 && typeof supabase !== "undefined"){
@@ -470,21 +471,35 @@
     upsertIndexEntryLocal();
     if(!hasStorage) return;
     var dataObj = { name: state.ledgerName, members: state.members, nextId: nextId };
+    var updatedAtStr = new Date().toISOString();
     lastSyncedJSON = JSON.stringify(dataObj);
+    lastSavedUpdatedAt = updatedAtStr;
     sb.from("ledgers").upsert({
       id: state.ledgerId,
       name: state.ledgerName || "Untitled ledger",
       data: dataObj,
-      updated_at: new Date().toISOString()
+      updated_at: updatedAtStr
     }, { onConflict: "id" }).then(function(res){
-      setBadge(res.error ? "Sync failed" : "Live · synced", res.error ? "off" : "live");
+      setBadge(res.error ? "Sync failed — check console" : "Live · synced", res.error ? "off" : "live");
       if(res.error) console.error("Supabase save error:", res.error);
-    }).catch(function(){ setBadge("Sync failed", "off"); });
+    }).catch(function(err){
+      console.error("Supabase save exception:", err);
+      setBadge("Sync failed — check console", "off");
+    });
+  }
+
+  // Saves are debounced so typing doesn't fire a network request (and a
+  // realtime echo back to ourselves) on every single keystroke.
+  function scheduleSave(){
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(saveLedgerData, 500);
   }
 
   function deleteLedgerRemote(id){
     if(!hasStorage) return Promise.resolve();
-    return sb.from("ledgers").delete().eq("id", id).catch(function(){});
+    return sb.from("ledgers").delete().eq("id", id).then(function(res){
+      if(res.error) console.error("Supabase delete error:", res.error);
+    }).catch(function(err){ console.error("Supabase delete exception:", err); });
   }
 
   // Real-time: any browser tab with this page open (anywhere, not just Claude)
@@ -497,18 +512,21 @@
       return;
     }
     if(activeEl.id === "screen-2" && state.ledgerId && payload.new && payload.new.id === state.ledgerId){
-      var d = payload.new.data || {};
-      var asStr = JSON.stringify(d);
-      if(asStr !== lastSyncedJSON){
-        state.members = d.members || [];
-        nextId = Math.max(nextId, d.nextId || 1);
-        state.ledgerName = d.name || state.ledgerName;
-        lastSyncedJSON = asStr;
-        localLedgerCache[state.ledgerId] = d;
-        document.getElementById("ledger-name-input").value = state.ledgerName;
-        renderTable();
-        setBadge("Live · synced", "live");
+      // Postgres jsonb does not preserve key order, so comparing JSON strings
+      // is unreliable — compare the timestamp we set on our own last save instead.
+      if(payload.new.updated_at && payload.new.updated_at === lastSavedUpdatedAt){
+        lastSyncedJSON = JSON.stringify(payload.new.data);
+        return;
       }
+      var d = payload.new.data || {};
+      state.members = d.members || [];
+      nextId = Math.max(nextId, d.nextId || 1);
+      state.ledgerName = d.name || state.ledgerName;
+      lastSyncedJSON = JSON.stringify(d);
+      localLedgerCache[state.ledgerId] = d;
+      document.getElementById("ledger-name-input").value = state.ledgerName;
+      renderTable(true);
+      setBadge("Live · synced", "live");
     }
   }
 
@@ -596,7 +614,7 @@
     state.members = cached ? cached.members : [];
     if(cached && cached.nextId) nextId = Math.max(nextId, cached.nextId);
     lastSyncedJSON = cached ? JSON.stringify({ name: cached.name, members: cached.members, nextId: cached.nextId }) : "";
-    renderTable();
+    renderTable(true);
     document.getElementById("ledger-name-input").value = state.ledgerName;
     goTo("2");
     if(hasStorage){
@@ -611,10 +629,15 @@
           lastSyncedJSON = JSON.stringify(data);
           localLedgerCache[id] = data;
           document.getElementById("ledger-name-input").value = state.ledgerName;
-          renderTable();
+          renderTable(true);
+        } else if(res.error){
+          console.error("Supabase open-ledger error:", res.error);
         }
         setBadge("Live · synced", "live");
-      }).catch(function(){ setBadge("Live · synced", "live"); });
+      }).catch(function(err){
+        console.error("Supabase open-ledger exception:", err);
+        setBadge("Sync failed — check console", "off");
+      });
     }
   }
 
@@ -848,7 +871,7 @@
     thead.innerHTML = row1 + row2;
   }
 
-  function renderTable(){
+  function renderTable(fromRemote){
     var months = getGlobalMonths();
     renderHeader(months);
     var body = document.getElementById("ledger-body");
@@ -856,7 +879,7 @@
     state.members.forEach(function(m){
       body.appendChild(buildRow(m, months));
     });
-    recalcTotals(months);
+    recalcTotals(months, !fromRemote);
   }
 
   function appendMonthCells(tr, m, months, mapKey){
@@ -954,7 +977,7 @@
   }
   function setVal(tr, f, v){ tr.querySelector('[data-f="'+f+'"]').value = v; }
 
-  function recalcTotals(months){
+  function recalcTotals(months, shouldSave){
     months = months || getGlobalMonths();
     var totals = { totalRevHours:0, totalCostHours:0, totalCost:0, totalRevenue:0, margin:0 };
     state.members.forEach(function(m){
@@ -979,7 +1002,7 @@
         '<td class="tf-margin">'+money(totals.margin)+'</td>'+
         '<td></td>'+
       '</tr>';
-    saveLedgerData();
+    if(shouldSave !== false) scheduleSave();
   }
 
   document.getElementById("add-row").addEventListener("click", function(){
@@ -993,7 +1016,7 @@
     state.ledgerName = e.target.value;
   });
   document.getElementById("ledger-name-input").addEventListener("change", function(){
-    upsertIndexEntry();
+    upsertIndexEntryLocal();
     saveLedgerData();
   });
 
