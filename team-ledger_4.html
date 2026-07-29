@@ -99,15 +99,17 @@
 
   /* ===== Ledger list screen ===== */
   #ledger-list{margin-top:4px;}
-  .ledger-row{
-    display:flex;justify-content:space-between;align-items:center;
-    padding:16px 0;border-top:1px solid var(--line);
+  .ledger-picker-row{display:flex;gap:10px;align-items:stretch;}
+  #ledger-select{flex:1;cursor:pointer;}
+  .ledger-picker-actions{
+    display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);
+    align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   }
-  .ledger-row:first-child{border-top:none;padding-top:0;}
-  .lr-name{font-family:'Fraunces',serif;font-weight:600;font-size:16.5px;}
-  .lr-meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-top:3px;}
-  .lr-actions{display:flex;gap:8px;flex-shrink:0;}
-  .lr-actions button{font-size:12.5px;padding:8px 14px;}
+  .ledger-picker-actions.show{display:flex;}
+  .lp-meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .lp-meta .lp-name{font-family:'Fraunces',serif;font-weight:600;font-size:16.5px;color:var(--ink);display:block;margin-bottom:3px;}
+  .lp-actions{display:flex;gap:8px;flex-shrink:0;}
+  .lp-actions button{font-size:12.5px;padding:9px 16px;}
   .empty-note{color:var(--ink-soft);font-size:14px;font-style:italic;margin:0 0 8px;}
 
   /* ===== Member table (screen 1) ===== */
@@ -173,12 +175,12 @@
   .toolbar-actions button{font-size:12.5px;padding:9px 14px;}
 
   .table-scroll{overflow-x:auto;border:1px solid var(--ink);border-radius:4px;background:var(--card);}
-  table{border-collapse:collapse;width:100%;min-width:1500px;}
+  table{border-collapse:collapse;width:100%;min-width:1400px;}
   thead th{
     position:sticky;top:0;background:var(--ink);color:var(--paper);
-    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.03em;
-    text-transform:uppercase;font-weight:500;text-align:left;padding:10px 10px;
-    border-right:1px solid #2E3A48;white-space:nowrap;
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.03em;
+    text-transform:uppercase;font-weight:500;text-align:left;padding:8px 8px;
+    border-right:1px solid #2E3A48;white-space:nowrap;z-index:2;
   }
   thead th.group-cost{background:var(--brick);}
   thead th.group-rev{background:var(--teal-dark);}
@@ -188,41 +190,62 @@
     padding:0;background:#fff;
   }
   tbody tr:nth-child(even) td{background:#F7F7F4;}
+  tbody tr:hover td{background:#E9F1EC;}
+  tbody tr:hover td.inactive-month{background:none;}
   tbody td input,tbody td select{
     border:none;border-radius:0;background:transparent;width:100%;
-    padding:9px 10px;font-size:13px;min-width:88px;
+    padding:7px 8px;font-size:12.5px;min-width:76px;
   }
   tbody td input:focus,tbody td select:focus{outline:2px solid var(--teal);outline-offset:-2px;background:#fff;}
-  tbody td.computed input{color:var(--ink-soft);background:#FBFAF6;}
+  tbody td.computed input{color:#3E4750;background:#FBFAF6;font-weight:500;}
   tbody td.computed input:focus{color:var(--ink);}
+  tbody td input[data-f="roleOther"]{border-top:1px dashed var(--line-strong)!important;}
   td.rm{text-align:center;background:#fff;}
   td.rm button{
     background:none;border:1px solid var(--line-strong);color:var(--brick);
-    width:26px;height:26px;padding:0;line-height:1;border-radius:3px;font-size:14px;
+    width:24px;height:24px;padding:0;line-height:1;border-radius:3px;font-size:13px;
   }
   td.rm button:hover{background:var(--brick);color:#fff;border-color:var(--brick);}
 
-  tfoot td{
-    padding:11px 10px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;
-    border-top:3px double var(--ink);border-bottom:none;background:#EAE7DC;
-    white-space:nowrap;
+  .totals-row-top td{
+    padding:9px 8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+    border-bottom:3px double var(--ink);background:#EAE7DC;white-space:nowrap;
   }
-  tfoot td.tf-label{text-align:right;color:var(--ink-soft);font-weight:500;font-style:italic;}
-  tfoot td.tf-margin{color:var(--good);}
+  .totals-row-top td.tf-label{text-align:right;color:var(--ink-soft);font-weight:500;font-style:italic;}
+  .totals-row-top td.tf-margin{color:var(--good);}
 
-  th.month-col-label{font-size:10px;min-width:70px;}
-  td.month-cell{min-width:70px;}
+  th.month-col-label{font-size:9.5px;min-width:56px;}
+  td.month-cell{min-width:56px;}
   td.month-cell.computed input{text-align:center;}
   td.inactive-month{
     background:repeating-linear-gradient(135deg,#E2E2DC,#E2E2DC 6px,#D8D8D1 6px,#D8D8D1 12px)!important;
     text-align:center;vertical-align:middle;
   }
-  td.inactive-month .inactive-label{color:#9A9C93;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 0;}
+  td.inactive-month .inactive-label{color:#9A9C93;font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:7px 0;}
   td.duration-display{background:#FBFAF6;}
   td.duration-display .duration-months{
-    font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--teal-dark);font-weight:600;
-    padding:9px 10px;white-space:nowrap;
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--teal-dark);font-weight:600;
+    padding:7px 8px;white-space:nowrap;
   }
+
+  /* ===== Frozen columns: # through Duration stay put; everything from the
+     Revenue Hours section onward scrolls independently within .table-scroll ===== */
+  .fz1,.fz2,.fz3,.fz4,.fz5,.fz6,.fz7,.fz8,.fz9,.fz-label-span{ position:sticky; }
+  .fz1{ width:34px; min-width:34px; max-width:34px; left:0; }
+  .fz2{ width:92px; min-width:92px; max-width:92px; left:34px; }
+  .fz3{ width:124px; min-width:124px; max-width:124px; left:126px; }
+  .fz4{ width:74px; min-width:74px; max-width:74px; left:250px; }
+  .fz5{ width:72px; min-width:72px; max-width:72px; left:324px; }
+  .fz6{ width:72px; min-width:72px; max-width:72px; left:396px; }
+  .fz7{ width:100px; min-width:100px; max-width:100px; left:468px; }
+  .fz8{ width:100px; min-width:100px; max-width:100px; left:568px; }
+  .fz9{ width:62px; min-width:62px; max-width:62px; left:668px; }
+  .fz-label-span{ width:696px; min-width:696px; max-width:696px; left:34px; }
+  thead .fz1,thead .fz2,thead .fz3,thead .fz4,thead .fz5,thead .fz6,thead .fz7,thead .fz8,thead .fz9{ z-index:5; }
+  tbody .fz1,tbody .fz2,tbody .fz3,tbody .fz4,tbody .fz5,tbody .fz6,tbody .fz7,tbody .fz8,tbody .fz9{ z-index:2; }
+  .fz-label-span{ z-index:4; }
+  .fz9,thead th.fz9{ box-shadow:3px 0 6px -3px rgba(0,0,0,0.35); }
+  .fz-label-span{ box-shadow:3px 0 6px -3px rgba(0,0,0,0.2); }
 
   .hint-row{margin-top:10px;color:var(--ink-soft);font-size:12px;font-family:'IBM Plex Mono',monospace;}
 
@@ -257,7 +280,20 @@
       <div class="card" style="max-width:760px;">
         <h2>Your ledgers</h2>
         <p>Create a ledger for each project, client, or engagement, and switch between them any time.</p>
-        <div id="ledger-list"></div>
+        <div id="ledger-list">
+          <div class="ledger-picker-row">
+            <select id="ledger-select">
+              <option value="" selected>Choose a ledger…</option>
+            </select>
+          </div>
+          <div class="ledger-picker-actions" id="ledger-picker-actions">
+            <div class="lp-meta" id="ledger-picker-meta"></div>
+            <div class="lp-actions">
+              <button type="button" class="ghost" id="open-selected-ledger">Open →</button>
+              <button type="button" class="ghost danger" id="delete-selected-ledger">Delete</button>
+            </div>
+          </div>
+        </div>
         <div class="form-actions" style="justify-content:flex-start;margin-top:20px;">
           <button type="button" id="new-ledger-btn">+ New ledger</button>
         </div>
@@ -338,7 +374,6 @@
         <table id="ledger-table">
           <thead id="ledger-thead"></thead>
           <tbody id="ledger-body"></tbody>
-          <tfoot id="ledger-totals"></tfoot>
         </table>
       </div>
       <p class="hint-row">Month columns are generated automatically from each member's From/To dates. Grey cells mean that member isn't on the project that month — both Revenue Hrs and Cost Hrs default to 160/month but are editable per month.</p>
@@ -419,8 +454,9 @@
   // 1) Create a Supabase project (free tier is fine): https://supabase.com
   // 2) Run supabase-setup.sql (provided alongside this file) in the SQL Editor
   // 3) Paste your Project URL and anon public key below (Project Settings → API)
-var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
+  var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kd3NmYXZ4Y3V2aGxxdnB4ZW5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMDUwNDMsImV4cCI6MjEwMDc4MTA0M30.A6rsjeso_STfQgw_e-ZYpX9NSLauI6JQuplcw_8BZrY";
+
   var sb = null;
   try {
     if(SUPABASE_URL.indexOf("YOUR_SUPABASE_URL") === -1 && typeof supabase !== "undefined"){
@@ -564,40 +600,53 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
 
   // ---------- Ledger list screen ----------
   function renderLedgerList(){
-    var wrap = document.getElementById("ledger-list");
-    if(!ledgerIndex.length){
-      wrap.innerHTML = '<p class="empty-note">No ledgers yet — create your first one below.</p>';
-      return;
-    }
+    var select = document.getElementById("ledger-select");
+    var actions = document.getElementById("ledger-picker-actions");
     var sorted = ledgerIndex.slice().sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
-    wrap.innerHTML = sorted.map(function(e){
-      var count = e.memberCount || 0;
-      return '<div class="ledger-row">'+
-        '<div class="lr-info">'+
-          '<div class="lr-name">'+esc(e.name || "Untitled ledger")+'</div>'+
-          '<div class="lr-meta">'+count+' member'+(count===1?"":"s")+' · updated '+formatRelative(e.updatedAt)+'</div>'+
-        '</div>'+
-        '<div class="lr-actions">'+
-          '<button type="button" class="ghost open-ledger" data-id="'+e.id+'">Open →</button>'+
-          '<button type="button" class="ghost danger del-ledger" data-id="'+e.id+'">Delete</button>'+
-        '</div>'+
-      '</div>';
-    }).join("");
-    wrap.querySelectorAll(".open-ledger").forEach(function(btn){
-      btn.addEventListener("click", function(){ openLedger(btn.getAttribute("data-id")); });
-    });
-    wrap.querySelectorAll(".del-ledger").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        if(btn.getAttribute("data-confirm") === "1"){
-          deleteLedger(btn.getAttribute("data-id"));
-        } else {
-          btn.setAttribute("data-confirm","1");
-          btn.textContent = "Confirm?";
-          setTimeout(function(){ btn.setAttribute("data-confirm",""); btn.textContent = "Delete"; }, 3000);
-        }
-      });
-    });
+    if(!sorted.length){
+      select.innerHTML = '<option value="" selected>No ledgers yet — create one below</option>';
+      select.disabled = true;
+    } else {
+      select.disabled = false;
+      select.innerHTML = '<option value="" selected disabled>Choose a ledger…</option>' +
+        sorted.map(function(e){
+          var count = e.memberCount || 0;
+          return '<option value="'+e.id+'">'+esc(e.name || "Untitled ledger")+' — '+count+' member'+(count===1?"":"s")+'</option>';
+        }).join("");
+    }
+    select.value = "";
+    actions.classList.remove("show");
   }
+
+  document.getElementById("ledger-select").addEventListener("change", function(){
+    var id = this.value;
+    var actions = document.getElementById("ledger-picker-actions");
+    if(!id){ actions.classList.remove("show"); return; }
+    var entry = ledgerIndex.filter(function(e){ return e.id === id; })[0];
+    var count = entry ? (entry.memberCount || 0) : 0;
+    document.getElementById("ledger-picker-meta").innerHTML =
+      '<span class="lp-name">'+esc(entry ? entry.name : "Untitled ledger")+'</span>'+
+      count+' member'+(count===1?"":"s")+' · updated '+formatRelative(entry ? entry.updatedAt : null);
+    actions.classList.add("show");
+  });
+
+  document.getElementById("open-selected-ledger").addEventListener("click", function(){
+    var id = document.getElementById("ledger-select").value;
+    if(id) openLedger(id);
+  });
+
+  document.getElementById("delete-selected-ledger").addEventListener("click", function(){
+    var btn = this;
+    var id = document.getElementById("ledger-select").value;
+    if(!id) return;
+    if(btn.getAttribute("data-confirm") === "1"){
+      deleteLedger(id);
+    } else {
+      btn.setAttribute("data-confirm","1");
+      btn.textContent = "Confirm?";
+      setTimeout(function(){ btn.setAttribute("data-confirm",""); btn.textContent = "Delete"; }, 3000);
+    }
+  });
 
   function deleteLedger(id){
     ledgerIndex = ledgerIndex.filter(function(e){ return e.id !== id; });
@@ -841,15 +890,15 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
     var span = Math.max(months.length, 1);
     var row1 =
       '<tr>'+
-        '<th rowspan="2"></th>'+
-        '<th rowspan="2">Name</th>'+
-        '<th rowspan="2">Role</th>'+
-        '<th rowspan="2">Type</th>'+
-        '<th rowspan="2">Bill Rate ($/hr)</th>'+
-        '<th rowspan="2">Pay Rate ($/hr)</th>'+
-        '<th rowspan="2">From</th>'+
-        '<th rowspan="2">To</th>'+
-        '<th rowspan="2">Duration</th>'+
+        '<th rowspan="2" class="fz1"></th>'+
+        '<th rowspan="2" class="fz2">Name</th>'+
+        '<th rowspan="2" class="fz3">Role</th>'+
+        '<th rowspan="2" class="fz4">Type</th>'+
+        '<th rowspan="2" class="fz5">Bill Rate ($/hr)</th>'+
+        '<th rowspan="2" class="fz6">Pay Rate ($/hr)</th>'+
+        '<th rowspan="2" class="fz7">From</th>'+
+        '<th rowspan="2" class="fz8">To</th>'+
+        '<th rowspan="2" class="fz9">Duration</th>'+
         '<th class="group-rev" colspan="'+span+'">Revenue Hours by Month</th>'+
         '<th rowspan="2" class="group-rev">Total Revenue Hrs</th>'+
         '<th class="group-cost" colspan="'+span+'">Cost Hours by Month</th>'+
@@ -868,7 +917,7 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
       months.forEach(function(mo){ row2 += '<th class="group-cost month-col-label">'+mo.label+'</th>'; });
     }
     row2 += '</tr>';
-    thead.innerHTML = row1 + row2;
+    thead.innerHTML = row1 + row2 + '<tr id="ledger-totals-top" class="totals-row-top"></tr>';
   }
 
   function renderTable(fromRemote){
@@ -908,24 +957,34 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
     });
   }
 
+  function roleCellHtml(m){
+    var known = m.role && ROLES.indexOf(m.role) !== -1;
+    var selVal = known ? m.role : (m.role ? "Other" : "");
+    var otherVal = known ? "" : (m.role || "");
+    var opts = '<option value="" disabled'+(selVal?"":" selected")+'>Select role…</option>' +
+      ROLES.map(function(r){ return '<option value="'+r+'"'+(r===selVal?" selected":"")+'>'+r+'</option>'; }).join("");
+    return '<select data-f="role">'+opts+'</select>'+
+      '<input type="text" data-f="roleOther" placeholder="Enter role" style="display:'+(selVal==="Other"?"block":"none")+';" value="'+esc(otherVal)+'">';
+  }
+
   function buildRow(m, months){
     var tr = document.createElement("tr");
     tr.dataset.id = m.id;
 
-    tr.appendChild(makeCell('<div style="padding:9px 10px;font-family:\'IBM Plex Mono\',monospace;color:var(--ink-soft);font-size:12px;">#'+m.id+'</div>'));
-    tr.appendChild(makeCell('<input type="text" data-f="name" value="'+esc(m.name)+'">'));
-    tr.appendChild(makeCell('<input type="text" data-f="role" value="'+esc(m.role)+'">'));
+    tr.appendChild(makeCell('<div style="padding:7px 8px;font-family:\'IBM Plex Mono\',monospace;color:var(--ink-soft);font-size:11.5px;">#'+m.id+'</div>', "fz1"));
+    tr.appendChild(makeCell('<input type="text" data-f="name" value="'+esc(m.name)+'">', "fz2"));
+    tr.appendChild(makeCell(roleCellHtml(m), "fz3"));
     tr.appendChild(makeCell(
       '<select data-f="workType">'+
         '<option value="Onsite"'+(m.workType==="Onsite"?" selected":"")+'>Onsite</option>'+
         '<option value="Offshore"'+(m.workType==="Offshore"?" selected":"")+'>Offshore</option>'+
-      '</select>'
+      '</select>', "fz4"
     ));
-    tr.appendChild(makeCell('<input type="number" step="0.5" data-f="billRate" value="'+m.billRate+'">'));
-    tr.appendChild(makeCell('<input type="number" step="0.5" data-f="payRate" value="'+m.payRate+'">'));
-    tr.appendChild(makeCell('<input type="date" data-f="fromDate" value="'+(m.fromDate||"")+'">'));
-    tr.appendChild(makeCell('<input type="date" data-f="toDate" value="'+(m.toDate||"")+'">'));
-    tr.appendChild(makeCell('<div class="duration-months"></div>', "duration-display"));
+    tr.appendChild(makeCell('<input type="number" step="0.5" data-f="billRate" value="'+m.billRate+'">', "fz5"));
+    tr.appendChild(makeCell('<input type="number" step="0.5" data-f="payRate" value="'+m.payRate+'">', "fz6"));
+    tr.appendChild(makeCell('<input type="date" data-f="fromDate" value="'+(m.fromDate||"")+'">', "fz7"));
+    tr.appendChild(makeCell('<input type="date" data-f="toDate" value="'+(m.toDate||"")+'">', "fz8"));
+    tr.appendChild(makeCell('<div class="duration-months"></div>', "duration-display fz9"));
 
     appendMonthCells(tr, m, months, "monthlyRevHours");
     tr.appendChild(makeCell('<input type="number" step="0.1" data-f="totalRevHours" value="0">', "computed"));
@@ -944,7 +1003,7 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
     });
     tr.appendChild(rmTd);
 
-    ["name","role","workType","billRate","payRate"].forEach(function(f){
+    ["name","workType","billRate","payRate"].forEach(function(f){
       var el = tr.querySelector('[data-f="'+f+'"]');
       el.addEventListener("input", function(){
         var val = el.tagName === "SELECT" ? el.value : (el.type === "number" ? num(el.value) : el.value);
@@ -953,6 +1012,18 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
         recalcTotals(months);
       });
     });
+
+    var roleSelect = tr.querySelector('[data-f="role"]');
+    var roleOtherInput = tr.querySelector('[data-f="roleOther"]');
+    function commitRole(){
+      var isOther = roleSelect.value === "Other";
+      roleOtherInput.style.display = isOther ? "block" : "none";
+      m.role = isOther ? (roleOtherInput.value || "Other") : roleSelect.value;
+      refreshComputed(tr, m, months);
+      recalcTotals(months);
+    }
+    roleSelect.addEventListener("change", commitRole);
+    roleOtherInput.addEventListener("input", commitRole);
 
     ["fromDate","toDate"].forEach(function(f){
       var el = tr.querySelector('[data-f="'+f+'"]');
@@ -977,6 +1048,21 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
   }
   function setVal(tr, f, v){ tr.querySelector('[data-f="'+f+'"]').value = v; }
 
+  function totalsCellsHTML(totals, months){
+    var span = Math.max(months.length, 1);
+    var marginPct = totals.totalRevenue > 0 ? (totals.margin / totals.totalRevenue * 100) : 0;
+    var marginDisplay = money(totals.margin) + ' (' + marginPct.toFixed(1) + '%)';
+    return '<td class="fz1"></td><td class="tf-label fz-label-span" colspan="8">Team totals →</td>'+
+      '<td colspan="'+span+'"></td>'+
+      '<td>'+totals.totalRevHours.toFixed(1)+'</td>'+
+      '<td colspan="'+span+'"></td>'+
+      '<td>'+totals.totalCostHours.toFixed(1)+'</td>'+
+      '<td>'+money(totals.totalCost)+'</td>'+
+      '<td>'+money(totals.totalRevenue)+'</td>'+
+      '<td class="tf-margin">'+marginDisplay+'</td>'+
+      '<td></td>';
+  }
+
   function recalcTotals(months, shouldSave){
     months = months || getGlobalMonths();
     var totals = { totalRevHours:0, totalCostHours:0, totalCost:0, totalRevenue:0, margin:0 };
@@ -988,20 +1074,9 @@ var SUPABASE_URL = "https://mdwsfavxcuvhlqvpxenq.supabase.co";
       totals.totalRevenue += c.totalRevenue;
       totals.margin += c.margin;
     });
-    var span = Math.max(months.length, 1);
-    var tf = document.getElementById("ledger-totals");
-    tf.innerHTML =
-      '<tr>'+
-        '<td></td><td class="tf-label" colspan="8">Team totals →</td>'+
-        '<td colspan="'+span+'"></td>'+
-        '<td>'+totals.totalRevHours.toFixed(1)+'</td>'+
-        '<td colspan="'+span+'"></td>'+
-        '<td>'+totals.totalCostHours.toFixed(1)+'</td>'+
-        '<td>'+money(totals.totalCost)+'</td>'+
-        '<td>'+money(totals.totalRevenue)+'</td>'+
-        '<td class="tf-margin">'+money(totals.margin)+'</td>'+
-        '<td></td>'+
-      '</tr>';
+    var cellsHtml = totalsCellsHTML(totals, months);
+    var topRow = document.getElementById("ledger-totals-top");
+    if(topRow) topRow.innerHTML = cellsHtml;
     if(shouldSave !== false) scheduleSave();
   }
 
